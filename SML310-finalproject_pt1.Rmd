@@ -1,0 +1,302 @@
+
+Going to download libaries and datasets and explore them
+
+```{r}
+## Downloading the necessary libraries
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+library(xlsx)
+
+## Downloading initial datasets
+stream.now.orig = read_csv('MoviesOnStreamingPlatforms_updated.csv')
+disney = read_csv('disney_movies_total_gross.csv')
+
+## Making the df get rid of columns we don't care about
+stream.now = stream.now.orig %>% select(-c(X1,ID))
+stream.now = stream.now %>% select(1:5)
+
+## Making sure to standardize the title column and to only have alphanumerics
+stream.now$Title = trimws(gsub("[^[:alnum:]]", " ", stream.now$Title))
+```
+
+
+Now exploring the Disney dataset:
+
+```{r}
+## Checking type of variables in Disney df
+str(disney)
+
+## Making the release data only show the year
+disney$release_date = format(disney$release_date, "%Y")
+
+## Getting rid of columns we don't care about
+disney = disney %>% select(-c(genre,mpaa_rating,total_gross))
+
+## Making sure to standardize the title column and to only have alphanumerics
+disney$movie_title = trimws(gsub("[^[:alnum:]]", " ", disney$movie_title))
+
+```
+
+
+Because I'm interested in seeing which disney movies are currently on streaming platforms, I want to examine the overlap between the two datasets:
+
+```{r}
+## Combining the Disney df and the df of movies on streaming platforms
+disney.stream.now = inner_join(disney, stream.now, c('movie_title'='Title'))
+
+## Making release_data a numerical variable
+disney.stream.now$release_date = as.numeric(disney.stream.now$release_date)
+
+## Getting rid of the rotton tomatoes column
+disney.stream.now = disney.stream.now %>% select(-c('Rotten Tomatoes','Age'))
+
+## To ensure that movies with same name also have same release date
+disney.stream.now = disney.stream.now %>% filter(Year == release_date)
+
+```
+
+
+After this, I edited the dataset in excel. I added a column called:
+
+'race': the race of the main characters that appear on the movie poster when googled - the race is separated by:
+    white = characters' apparent races are white
+    POC = characters appear to be people of color
+    mixed = characters appear to be both white and POC
+
+```{r}
+
+## Adding race to the combined df (done in excel)
+race.data = read_csv('New.data.add.csv')
+
+## Only selecting columns with data
+race.data = race.data %>% select(2:7) 
+
+## Making race a factor variable
+race.data$race = as.factor(race.data$race)
+
+## Making sure to standardize the title column and to only have alphanumerics
+race.data$movie_title = trimws(gsub("[^[:alnum:]]", " ", race.data$movie_title))
+
+## Ommitting columns with NA
+race.data = na.omit(race.data)
+
+## Making a GGplot to explore relationships between variables 
+ggpairs(aes(color = race), data = race.data, columns = 3:6, title = "Figure 1: Relationship between Disney Movies and Streaming Platform and Race Variables", legend = c(2,2)) 
+```
+
+Now, trying to see if find similar information in different datasets. Looking to see if similar data is found from grammy nominated songs and albums and popular music.
+
+```{r}
+## Downloading datasets
+grammy.albums = read_csv('grammyAlbums_199-2019.csv')
+grammy.songs = read_csv('grammySongs_1999-2019.csv')
+top200 = read_csv('spotifyWeeklyTop200Streams.csv')
+hot100 = read_csv('billboardHot100_1999-2019.csv')
+
+## Tells how many times each artist was in the weekly top 200; groups by artist
+top200_artist = top200_songs %>% group_by(Artist) %>% summarise(number_of_songs = n(), total_times_in_top200 = sum(times_in_top200), total_streams=sum(total_number_streams)) %>% ungroup()
+
+## Tells how many times each song was in the weekly top 200 
+top200_songs = top200 %>% select(everything()) %>% group_by(Name, Artist) %>% summarise(times_in_top200 = n(), total_number_streams = sum(Streams)) %>% ungroup()
+
+```
+
+A similar process as determining the race in the movies is performed here. The top200_artist df is extracted, and using excel, a race column is added. 
+
+'race': the race of the singer/rapper/band members that appear on google images when googled - the race is separated by:
+    white = artist/s apparent races is/are white
+    POC = cartist/s apparent races is/are people of color
+    mixed = artist/s apparent races is/are both white and POC
+
+
+```{r}
+## New df with race included
+race.top200= read_csv('top200df.csv')
+
+## Making sure to standardize Artist to only have alphanumerics
+race.top200$Artist = trimws(gsub("[^[:alnum:]]", " ", race.top200$Artist))
+
+## Making Artist a factor 
+race.top200$Artist = as.factor(race.top200$Artist)
+
+## Making race a factor and "mixed" into POC
+race.top200$race = ifelse(race.top200$race == "mixed",'POC',race.top200$race)
+race.top200$race = as.factor(race.top200$race)
+
+## Plotting data to examine the density by race
+ggplot(race.top200, aes(x = race, fill = 'hotpink')) + geom_bar() + ggtitle('Balance Between Races in Spotify Top 200 Dataset') + xlab('Race') + ylab('Count') 
+
+```
+
+The outcomes here show that the majority of singers are POC when including mixed people.These would be the successful singers as determined by repeats of their songs played.
+
+We are now interested in seeing how an artist's instagram followers affects its classification. Therefore, we look at a new dataset. This new dataset has a list of artists, but also includes their gender and their number of followers at the time the data was recorded. 
+
+```{r}
+## Now we are intrigued at looking at followers too; Download this dataset
+followers = read_csv('BillboardFromLast20/artistDf.csv')
+
+## Deleting columns don't care about
+followers = followers %>% select(c(2,3,7))
+
+## Making sure to standardize to only have alphanumerics
+followers$Artist = trimws(gsub("[^[:alnum:]]", " ", followers$Artist))
+
+## Making artist a factor
+followers$Artist = as.factor(followers$Artist)
+```
+
+
+Combining followers and gender information with the race dataset:
+
+```{r}
+## Combining followers and gender df with race data
+followers.race = inner_join(race.top200, followers)
+
+## Plotting data to examine the density by race
+ggplot(followers.race, aes(x = race, fill = 'hotpink')) + geom_bar() + ggtitle('Balance Between Races in Spotify Top 200 Dataset Overlapped with Followers') + xlab('Race') + ylab('Count')
+```
+
+## Making a GGplot to explore relationships between variables 
+
+Now I want to examine grammy song data, so going back to grammy song and album data. 
+
+```{r}
+## Only selecting columns interested in
+grammy.songs = grammy.songs %>% select(-c(1,2))
+grammy.albums = grammy.albums %>% select(-1)
+
+## getting each artists # grammys nominated for songs and albumns
+number.song.artist = grammy.songs %>% group_by(Artist) %>% summarise(Grammy.song.nom = n())
+number.album.artist = grammy.albums %>% group_by(Artist) %>% summarise(Grammy.album.nom = n())
+
+## Combining the overlap between the followers dataset and the number of songs each artist nominated for in Grammys
+
+final1 = inner_join(number.song.artist, followers.race, c())
+final1 = final1 %>% select(-c(number_of_songs,total_streams,total_times_in_top200,Gender))
+final1 = final1[,c(1,2,4,3)]
+final1$race = ifelse(final1$race =="white", 0, 1)
+
+write_delim(final1, delim = ",", path = '/Users/maguina/Downloads/SML310/SML310-FinalProjectInfo/final1.csv') 
+
+final2 = inner_join(followers.race,final1, c("Artist"))
+final2 = final2 %>% select(-c(Grammy.song.nom,Gender))
+final2 = final2 %>% select(-c(number_of_songs,total_times_in_top200,total_streams))
+final2 = final2[,c(1,3,2)]
+final2$race.x = ifelse(final2$race.x =="white", 0, 1)
+
+write_delim(final2, delim = ",", path = '/Users/maguina/Downloads/SML310/SML310-FinalProjectInfo/final2.csv') 
+
+## Making into df or excel
+# write.xlsx(number.song.artist, file = '/Users/maguina/Downloads/SML310/FinalProject/number.song.artist.xlsx') 
+# write_delim(number.album.artist, delim = ",", path = '/Users/maguina/Downloads/SML310/FinalProject/number.album.artist.csv') 
+```
+
+
+
+
+```{r}
+## plots of race
+    ggplot(race.top200, aes(x = race, y = total_times_in_top200, color = race)) + geom_boxplot()
+    ggplot(race.top200, aes(x = race, y = number_of_songs, color = race)) + geom_boxplot()
+    ggplot(race.top200, aes(x = race, y = total_streams, color = race)) + geom_boxplot()
+    ggplot(race.top200, aes(x = number_of_songs, y = total_streams, group = race, color = race)) + geom_point() 
+
+## plots of gender
+ggplot(followers.race, aes(x = Gender, y = total_times_in_top200, color = Gender)) + geom_boxplot()
+ggplot(followers.race, aes(x = Gender, y = number_of_songs, color = Gender)) + geom_boxplot()
+ggplot(followers.race, aes(x = Gender, y = total_streams, color = Gender)) + geom_boxplot()
+ggplot(followers.race, aes(x = number_of_songs, y = total_streams, group = Gender, color = Gender)) + geom_point()
+
+
+
+```
+
+
+---- redo this -- 
+
+sum songs:
+Women have a higher average of number of songs
+Men have a higher maximum and more outliers
+
+ignored mixed.. (add to data later)
+- POC has higher average
+- White has the maximum, but looks like POC has more higher values
+
+
+
+
+total streams:
+- women have a higher average of total streams
+- men have more higher maximum streams than women
+
+ignored mixed.. (add to data later)
+- looks like about even
+- White has the maximum
+- POC have more higher valuyes it appears
+
+---
+
+
+Now want to examine gender and race
+```{r}
+data.soc = followers.race
+
+data.soc$combo[(data.soc$Gender == 'F' & data.soc$race == 'POC')] = 'FPOC'
+data.soc$combo[(data.soc$Gender == 'M' & data.soc$race == 'POC')] = 'MPOC'
+data.soc$combo[(data.soc$Gender == 'F' & data.soc$race == 'white')] = 'Fwhite'
+data.soc$combo[(data.soc$Gender == 'M' & data.soc$race == 'white')] = 'Mwhite'
+data.soc$combo[(data.soc$Gender == 'F' & data.soc$race == 'mixed')] = 'Fmixed'
+data.soc$combo[(data.soc$Gender == 'M' & data.soc$race == 'mixed')] = 'Mmixed'
+
+data.soc$combo = as.factor(data.soc$combo)
+data.soc$Gender = as.factor(data.soc$Gender)
+
+## Cannot do ggpairs with data.soc because the categorical of mixed doesn't have enough observations
+
+## Making new df for ggpairs
+ok = data.soc %>% filter(combo != 'Mmixed', combo != 'Fmixed')
+ggpairs(aes(color = combo), data = ok, columns = c(2,3,4,6,8))
+
+ggpairs(aes(color = race), data = followers.race, columns = c(2,3,4,5,6,7), title = "Relationship between Spotify top 200 Artists, Followers, and Race Variables", legend = c(4,4))
+
+```
+
+
+```{r}
+## Making df with rotten tomato
+tomato = stream.now.orig %>% select(-c(X1, ID))
+tomato = tomato %>% select(1:5)
+tomato$Title = trimws(gsub("[^[:alnum:]]", " ", tomato$Title))
+tomato.final = inner_join(disney, tomato, c('movie_title'='Title'))
+tomato.final = tomato.final %>% filter(Year == release_date)
+tomato.final$release_date = as.numeric(tomato.final$release_date)
+tomato.final$movie_title = trimws(gsub("[^[:alnum:]]", " ", tomato.final$movie_title))
+tomato.final = tomato.final %>% select(-c( release_date, Year, Age, inflation_adjusted_gross, IMDb))
+tomato.final = full_join(race.data, tomato.final, c("movie_title"='movie_title'))
+
+## rearranging the df so that race is last column
+tomato.race = tomato.final[,c(1,2,3,4,5,7,6)]
+
+## removing % from the columns
+tomato.race$`Rotten Tomatoes` = trimws(gsub("[^[:alnum:]]", " ", tomato.race$`Rotten Tomatoes`))
+
+## Renamming 'Rotten Tomatoes'
+colnames(tomato.race)[6] = 'rotten'
+
+## Saving to folder
+write_delim(tomato.race, delim = ",", path = '/Users/maguina/Downloads/SML310/FinalProject/tomato.race.csv') 
+
+```
+
+
+
+
+
+
+
+
+
